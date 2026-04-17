@@ -1,46 +1,56 @@
-name: Python CI
+name: Python CI/CD Pipeline
 
-# Trigger the workflow on any push to the main branch or pull request
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
+  workflow_dispatch:   # allows manual trigger
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code from the repository
-      - name: Check out code
-        uses: actions/checkout@v2
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # Step 2: Set up Python environment
+      # 2. Setup Python
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: "3.10"
 
-      # Step 3: Install dependencies
+      # 3. Cache dependencies (faster builds)
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 4. Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install flake8 pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Step 4: Run tests
+      # 5. Lint code
+      - name: Lint with flake8
+        run: |
+          flake8 . --max-line-length=127
+
+      # 6. Run tests
       - name: Run tests
-        run: pytest
- 
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        pytest
+        run: |
+          pytest --cov=.
+
+      # 7. Upload test results (optional)
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./
